@@ -1,10 +1,12 @@
 const dotenv = require("dotenv");
 dotenv.config();
+const dns = require("node:dns");
+dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
 const express = require("express");
 const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 5000;
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = process.env.MONGODB_URI;
 
 app.use(express.json());
@@ -29,13 +31,29 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+    const db = client.db("recipehub");
+    const recipesCollection = db.collection("recipes");
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
 
-    app.get("/greetings", async (req, res) => {
-      res.json({ message: "Hello World!", status: "success" });
+    // Recipes Related APIs
+
+    app.get("/api/recipes/featured", async (req, res) => {
+      const filter = {
+        isFeatured: true,
+      };
+      const featuredRecipes = await recipesCollection.find(filter).toArray();
+      res.json(featuredRecipes);
+    });
+
+    app.get("/api/recipes/:recipeId", async (req, res) => {
+      const recipeId = await req.params.recipeId;
+      const recipe = await recipesCollection.findOne({
+        _id: new ObjectId(recipeId),
+      });
+      res.json(recipe);
     });
 
     console.log(
