@@ -47,6 +47,46 @@ async function run() {
       const featuredRecipes = await recipesCollection.find(filter).toArray();
       res.json(featuredRecipes);
     });
+    app.get("/api/recipes", async (req, res) => {
+      try {
+        const page = Number(req.query.page) || 1;
+        const perPage = Number(req.query.perPage) || 12;
+        const skip = (page - 1) * perPage;
+
+        const { search, category, cuisine } = req.query;
+
+        let filterQuery = {};
+
+        if (search) {
+          filterQuery.recipeName = { $regex: search, $options: "i" };
+        }
+        if (category) {
+          filterQuery.category = { $in: [category] };
+        }
+        if (cuisine) {
+          filterQuery.cuisineType = { $in: [cuisine] };
+        }
+
+        const recipes = await recipesCollection
+          .find(filterQuery)
+          .skip(skip)
+          .limit(perPage)
+          .toArray();
+
+        const totalRecipes =
+          await recipesCollection.countDocuments(filterQuery);
+        const totalPages = Math.ceil(totalRecipes / perPage);
+
+        res.json({
+          recipes,
+          totalPages,
+          totalRecipes,
+        });
+      } catch (error) {
+        console.error("Database Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
 
     app.get("/api/recipes/:recipeId", async (req, res) => {
       const recipeId = await req.params.recipeId;
@@ -54,6 +94,17 @@ async function run() {
         _id: new ObjectId(recipeId),
       });
       res.json(recipe);
+    });
+
+    app.get("/api/recipes/:authorId", async (req, res) => {
+      const { authorId } = req.params;
+
+      const filter = {
+        authorId: authorId,
+      };
+
+      const recipes = await recipesCollection.find(filter).toArray();
+      res.json(recipes);
     });
 
     console.log(
