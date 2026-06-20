@@ -96,15 +96,65 @@ async function run() {
       res.json(recipe);
     });
 
-    app.get("/api/recipes/:authorId", async (req, res) => {
-      const { authorId } = req.params;
+    app.get("/api/recipes/my/:authorId", async (req, res) => {
+      const authorId = req.params.authorId;
 
+      const recipes = await recipesCollection
+        .find({
+          authorId: authorId,
+        })
+        .toArray();
+      res.json(recipes);
+    });
+
+    app.get("/api/most-liked/recipes", async (req, res) => {
+      const recipes = await recipesCollection
+        .find({})
+        .sort({ likesCount: -1 })
+        .limit(6)
+        .toArray();
+      res.json(recipes);
+    });
+
+    // POST API of recipes
+
+    app.post("/api/recipes", async (req, res) => {
+      const recipe = req.body;
+      const newRecipe = await recipesCollection.insertOne(recipe);
+      res.json(newRecipe);
+    });
+
+    // Patch API of recipes
+
+    app.patch("/api/recipe/:id", async (req, res) => {
+      const { id } = req.params;
+      console.log(id);
+      const newRecipeData = req.body;
+      console.log(newRecipeData);
       const filter = {
-        authorId: authorId,
+        _id: new ObjectId(id),
       };
 
-      const recipes = await recipesCollection.find(filter).toArray();
-      res.json(recipes);
+      const updateDoc = {
+        $set: newRecipeData,
+      };
+
+      const result = await recipesCollection.updateOne(filter, updateDoc);
+      console.log(result);
+      res.json(result);
+    });
+
+    // Delete API of recipes
+
+    app.delete("/api/myRecipe/:id", async (req, res) => {
+      const { id } = req.params;
+      console.log(id);  
+      const filter = {
+        _id: new ObjectId(id),
+      };
+
+      const result = await recipesCollection.deleteOne(filter);
+      res.json(result);
     });
 
     console.log(
