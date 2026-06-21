@@ -34,28 +34,6 @@ const client = new MongoClient(uri, {
   },
 });
 
-const verifyToken = async (req, res, next) => {
-  const authHeader = req.headers.Authorization;
-
-  if (!authHeader) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  const token = authHeader.split(" ")[1];
-
-  if (!token) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  try {
-    const { payload } = await jwtVerify(token, JWKS);
-    console.log(payload);
-    next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-  }
-};
-
 async function run() {
   try {
     const db = client.db("recipehub");
@@ -67,6 +45,30 @@ async function run() {
     // await client.connect();
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
+
+    const verifyToken = async (req, res, next) => {
+      const authHeader = req.headers?.authorization;
+      console.log(authHeader);
+      if (!authHeader) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const token = authHeader.split(" ")[1];
+      console.log("Token", token);
+      if (!token) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      try {
+        console.log("Inside Try Block!");
+        const { payload } = await jwtVerify(token, JWKS);
+        console.log("payload", payload);
+        next();
+      } catch (error) {
+        console.log(error);
+        res.status(401).json({ message: "Unauthorized" });
+      }
+    };
 
     // ------------- Recipes Related APIs -------------
 
