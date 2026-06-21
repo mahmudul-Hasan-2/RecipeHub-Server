@@ -7,6 +7,7 @@ const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { jwtVerify, createRemoteJWKSet } = require("jose-cjs");
 const uri = process.env.MONGODB_URI;
 
 app.use(express.json());
@@ -14,6 +15,10 @@ app.use(
   cors({
     origin: process.env.CLIENT_URL,
   }),
+);
+
+const JWKS = createRemoteJWKSet(
+  new URL(`${process.env.CLIENT_URL}/api/auth/jwks`),
 );
 
 app.get("/", (req, res) => {
@@ -29,12 +34,35 @@ const client = new MongoClient(uri, {
   },
 });
 
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.Authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+    console.log(payload);
+    next();
+  } catch (error) {
+    res.status(401).json({ message: "Unauthorized" });
+  }
+};
+
 async function run() {
   try {
     const db = client.db("recipehub");
     const recipesCollection = db.collection("recipes");
     const likedRecipesCollection = db.collection("likedRecipes");
     const favouritesCollection = db.collection("favourites");
+    const usersCollection = db.collection("user");
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
     // Send a ping to confirm a successful connection
@@ -98,7 +126,7 @@ async function run() {
       res.json(recipe);
     });
 
-    app.get("/api/recipes/my/:authorId", async (req, res) => {
+    app.get("/api/recipes/my/:authorId", verifyToken, async (req, res) => {
       const authorId = req.params.authorId;
 
       const recipes = await recipesCollection
@@ -204,6 +232,7 @@ async function run() {
           .json({ success: false, error: "Internal Server Error" });
       }
     });
+
     // Delete API of recipes
 
     app.delete("/api/myRecipe/:id", async (req, res) => {
@@ -287,6 +316,26 @@ async function run() {
         console.error("Backend Error:", error);
         res.status(500).json({ success: false, message: "Server error" });
       }
+    });
+
+    // User Related APIs
+
+    app.patch("/api/users/:userId", async (req, res) => {
+      const { userId } = req.params;
+      const { isPremium } = req.body;
+
+      console.log(userId, isPremium);
+
+      const filter = {
+        _id: new ObjectId(userId),
+      };
+
+      const updateDoc = {
+        $set: { isPremium: isPremium },
+      };
+
+      const result = await usersCollection.updateOne(filter, updateDoc);
+      res.json(result);
     });
 
     console.log(
