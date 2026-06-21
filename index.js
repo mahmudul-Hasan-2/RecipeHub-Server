@@ -41,6 +41,7 @@ async function run() {
     const likedRecipesCollection = db.collection("likedRecipes");
     const favouritesCollection = db.collection("favourites");
     const usersCollection = db.collection("user");
+    const transactionsCollection = db.collection("transactions");
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
     // Send a ping to confirm a successful connection
@@ -181,24 +182,18 @@ async function run() {
         const { recipeId } = req.params;
         const likedPayload = req.body;
 
-        // 🛑 অত্যন্ত গুরুত্বপূর্ণ: ফিল্টার করার সময় নিশ্চিত করতে হবে আমরা সঠিক
-        // recipeId এবং userId দিয়ে খুঁজছি এবং প্রয়োজনে ObjectId-তে কনভার্ট করছি।
         const likeQuery = {
-          recipeId: likedPayload.recipeId, // ফ্রন্টএন্ড থেকে আসা রেসিপি আইডি
-          userId: likedPayload.userId, // ফ্রন্টএন্ড থেকে আসা ইউজার আইডি
+          recipeId: likedPayload.recipeId,
+          userId: likedPayload.userId,
         };
 
-        // ১. চেক করা হচ্ছে ঠিক এই নির্দিষ্ট ইউজার এই নির্দিষ্ট রেসিপিতে লাইক দিয়েছে কি না
         const existingLike = await likedRecipesCollection.findOne(likeQuery);
 
-        // রেসিপি কালেকশনের ফিল্টার (যেখানে কাউন্ট কমবে বা বাড়বে)
         const recipeFilter = { _id: new ObjectId(recipeId) };
 
         if (existingLike) {
-          // 💔 ইউজার অলরেডি লাইক দিয়েছে -> শুধুমাত্র এই ইউজারের লাইকটিই ডিলিট হবে
           await likedRecipesCollection.deleteOne(likeQuery);
 
-          // রেসিপির লাইক কাউন্ট ১ কমিয়ে দাও (-1)
           const updateDoc = { $inc: { likesCount: -1 } };
           const result = await recipesCollection.updateOne(
             recipeFilter,
@@ -211,10 +206,8 @@ async function run() {
             result,
           });
         } else {
-          // ❤️ ইউজার আগে লাইক দেয়নি -> নতুন লাইক যোগ হবে
           await likedRecipesCollection.insertOne(likedPayload);
 
-          // রেসিপির লাইক কাউন্ট ১ বাড়িয়ে দাও (+1)
           const updateDoc = { $inc: { likesCount: 1 } };
           const result = await recipesCollection.updateOne(
             recipeFilter,
@@ -235,8 +228,6 @@ async function run() {
       }
     });
 
-    // Delete API of recipes
-
     app.delete("/api/myRecipe/:id", async (req, res) => {
       const { id } = req.params;
       console.log(id);
@@ -254,17 +245,15 @@ async function run() {
       const likedRecipes = await likedRecipesCollection.find({}).toArray();
       res.json(likedRecipes);
     });
-    // ব্যাকএন্ড: Server.js
+
     app.get("/api/my-recipes-likes/:userId", async (req, res) => {
       const { userId } = req.params;
 
-      // প্রথমে ওই ইউজারের সব রেসিপি আইডি বের করো
       const myRecipes = await recipesCollection
         .find({ authorId: userId })
         .toArray();
       const myRecipeIds = myRecipes.map((r) => r._id.toString());
 
-      // ওই রেসিপি আইডিগুলোতে মোট কতগুলো লাইক পড়েছে তা কাউন্ট করো
       const totalLikes = await likedRecipesCollection.countDocuments({
         recipeId: { $in: myRecipeIds },
       });
@@ -274,9 +263,8 @@ async function run() {
 
     // --------------- favourites Related APIs ---------------
 
-    // 🔍 নির্দিষ্ট ইউজারের সকল ফেভারিট রেসিপি পাওয়ার জন্য
     app.get("/api/favorites", async (req, res) => {
-      const { userId } = req.query; // req.query ব্যবহার করতে হবে
+      const { userId } = req.query;
 
       if (!userId) {
         return res.status(400).json({ message: "User ID is required" });
@@ -288,12 +276,12 @@ async function run() {
       res.json(favorites);
     });
 
-    // Server.js বা তোমার রাউট ফাইল
+    // Mission deleting all comment text
+
     app.post("/api/add-favourite", async (req, res) => {
       try {
         const { userId, recipeId } = req.body;
 
-        // ১. চেক করো অলরেডি আছে কি না
         const existing = await favouritesCollection.findOne({
           authorId: userId,
           recipeId: recipeId,
@@ -306,7 +294,6 @@ async function run() {
           });
         }
 
-        // ২. শুধুমাত্র প্রয়োজনীয় ডাটা সেভ করো, পুরো req.body নয় (নিরাপত্তার জন্য ভালো)
         const favoriteDoc = {
           ...req.body,
           createdAt: new Date(),
@@ -320,7 +307,7 @@ async function run() {
       }
     });
 
-    // User Related APIs
+    // ------------- User Related APIs -------------
 
     app.patch("/api/users/:userId", async (req, res) => {
       const { userId } = req.params;
@@ -338,6 +325,23 @@ async function run() {
 
       const result = await usersCollection.updateOne(filter, updateDoc);
       res.json(result);
+    });
+
+    // ------------- Transactions Related APIs -------------
+
+    app.get("/api/transactions/:userId", async (req, res) => {
+      const { userId } = req.params;
+      const query = { userId: userId };
+      const transactions = await transactionsCollection.find(query).toArray();
+      res.json(transactions);
+    });
+
+    app.post("/api/transaction", async (req, res) => {
+      const transaction = req.body;
+
+      const newTransaction =
+        await transactionsCollection.insertOne(transaction);
+      res.json(newTransaction);
     });
 
     console.log(
