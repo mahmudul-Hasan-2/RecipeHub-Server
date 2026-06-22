@@ -307,6 +307,17 @@ async function run() {
       }
     });
 
+    app.delete("/api/favourite/:id", async (req, res) => {
+      const { id } = req.params;
+
+      const query = {
+        _id: new ObjectId(id),
+      };
+
+      const result = await favouritesCollection.deleteOne(query);
+      res.json(result);
+    });
+
     // ------------- User Related APIs -------------
 
     app.patch("/api/users/:userId", async (req, res) => {
