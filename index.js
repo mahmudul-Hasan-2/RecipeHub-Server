@@ -42,6 +42,7 @@ async function run() {
     const favouritesCollection = db.collection("favourites");
     const usersCollection = db.collection("user");
     const transactionsCollection = db.collection("transactions");
+    const reportsCollection = db.collection("reports");
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
     // Send a ping to confirm a successful connection
@@ -73,12 +74,17 @@ async function run() {
 
     // ------------- Recipes Related APIs -------------
 
+    app.get("/api/recipes/counts", verifyToken, async (req, res) => {
+      const recipes = await recipesCollection.countDocuments({});
+      res.json(recipes);
+    });
+
     app.get("/api/recipes/featured", async (req, res) => {
       const filter = {
         isFeatured: true,
       };
       const featuredRecipes = await recipesCollection.find(filter).toArray();
-      res.json(featuredRecipes);
+      res.json(featuredRecipes || []);
     });
     app.get("/api/recipes", async (req, res) => {
       try {
@@ -121,7 +127,12 @@ async function run() {
       }
     });
 
-    app.get("/api/recipes/:recipeId", async (req, res) => {
+    app.get("/api/allRecipes", verifyToken, async (req, res) => {
+      const recipes = await recipesCollection.find({}).toArray();
+      res.json(recipes);
+    });
+
+    app.get("/api/recipes/:recipeId", verifyToken, async (req, res) => {
       const recipeId = await req.params.recipeId;
       const recipe = await recipesCollection.findOne({
         _id: new ObjectId(recipeId),
@@ -151,7 +162,7 @@ async function run() {
 
     // POST API of recipes
 
-    app.post("/api/recipes", async (req, res) => {
+    app.post("/api/recipes", verifyToken, async (req, res) => {
       const recipe = req.body;
       const newRecipe = await recipesCollection.insertOne(recipe);
       res.json(newRecipe);
@@ -159,7 +170,7 @@ async function run() {
 
     // Patch API of recipes
 
-    app.patch("/api/recipe/:id", async (req, res) => {
+    app.patch("/api/recipe/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
       console.log(id);
       const newRecipeData = req.body;
@@ -177,7 +188,7 @@ async function run() {
       res.json(result);
     });
 
-    app.patch("/api/like/recipe/:recipeId", async (req, res) => {
+    app.patch("/api/like/recipe/:recipeId", verifyToken, async (req, res) => {
       try {
         const { recipeId } = req.params;
         const likedPayload = req.body;
@@ -228,7 +239,29 @@ async function run() {
       }
     });
 
-    app.delete("/api/myRecipe/:id", async (req, res) => {
+    app.patch(
+      "/api/recipe/isFeatured/:recipeId",
+      verifyToken,
+      async (req, res) => {
+        const { recipeId } = req.params;
+        const isFeatured = req.body.isFeatured;
+
+        const filter = {
+          _id: new ObjectId(recipeId),
+        };
+
+        const updateDoc = {
+          $set: { isFeatured: isFeatured },
+        };
+
+        const result = await recipesCollection.updateOne(filter, updateDoc);
+        res.json(result);
+      },
+    );
+
+    // Delete API of recipes
+
+    app.delete("/api/myRecipe/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
       console.log(id);
       const filter = {
@@ -246,7 +279,7 @@ async function run() {
       res.json(likedRecipes);
     });
 
-    app.get("/api/my-recipes-likes/:userId", async (req, res) => {
+    app.get("/api/my-recipes-likes/:userId", verifyToken, async (req, res) => {
       const { userId } = req.params;
 
       const myRecipes = await recipesCollection
@@ -276,9 +309,7 @@ async function run() {
       res.json(favorites);
     });
 
-    // Mission deleting all comment text
-
-    app.post("/api/add-favourite", async (req, res) => {
+    app.post("/api/add-favourite", verifyToken, async (req, res) => {
       try {
         const { userId, recipeId } = req.body;
 
@@ -307,7 +338,7 @@ async function run() {
       }
     });
 
-    app.delete("/api/favourite/:id", async (req, res) => {
+    app.delete("/api/favourite/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
 
       const query = {
@@ -320,7 +351,22 @@ async function run() {
 
     // ------------- User Related APIs -------------
 
-    app.patch("/api/users/:userId", async (req, res) => {
+    app.get("/api/users/counts", verifyToken, async (req, res) => {
+      const users = await usersCollection.find({}).toArray();
+      res.json(users);
+    });
+
+    app.get("/api/users", verifyToken, async (req, res) => {
+      const users = await usersCollection.find({}).toArray();
+      res.json(users);
+    });
+
+    app.get("/api/users/premiums", verifyToken, async (req, res) => {
+      const users = await usersCollection.countDocuments({ isPremium: true });
+      res.json(users);
+    });
+
+    app.patch("/api/users/:userId", verifyToken, async (req, res) => {
       const { userId } = req.params;
       const { isPremium } = req.body;
 
@@ -338,21 +384,58 @@ async function run() {
       res.json(result);
     });
 
+    app.patch(
+      "/api/users/update-status/:userId",
+      verifyToken,
+      async (req, res) => {
+        const { userId } = req.params;
+        const status = req.body.status;
+
+        const query = {
+          _id: new ObjectId(userId),
+        };
+
+        const updateDoc = {
+          $set: { isBlocked: status },
+        };
+
+        const result = await usersCollection.updateOne(query, updateDoc);
+        res.json(result);
+      },
+    );
+
     // ------------- Transactions Related APIs -------------
 
-    app.get("/api/transactions/:userId", async (req, res) => {
+    app.get("/api/transactions/:userId", verifyToken, async (req, res) => {
       const { userId } = req.params;
       const query = { userId: userId };
       const transactions = await transactionsCollection.find(query).toArray();
       res.json(transactions);
     });
 
-    app.post("/api/transaction", async (req, res) => {
+    app.post("/api/transaction", verifyToken, async (req, res) => {
       const transaction = req.body;
 
       const newTransaction =
         await transactionsCollection.insertOne(transaction);
       res.json(newTransaction);
+    });
+
+    // ------------- Reports Related APIs -------------
+    app.get("/api/reports/counts", verifyToken, async (req, res) => {
+      const reports = await reportsCollection.countDocuments({});
+      res.json(reports);
+    });
+
+    app.get("/api/reports", verifyToken, async (req, res) => {
+      const reports = await reportsCollection.find({}).toArray();
+      res.json(reports);
+    });
+
+    app.post("/api/report", verifyToken, async (req, res) => {
+      const report = req.body;
+      const newReport = await reportsCollection.insertOne(report);
+      res.json(newReport);
     });
 
     console.log(
