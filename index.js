@@ -438,6 +438,14 @@ async function run() {
       res.json(newReport);
     });
 
+    app.delete("/api/report/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const report = await reportsCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      res.json(report);
+    });
+
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
     );
